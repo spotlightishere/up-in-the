@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"log"
 	"math/rand"
 	"net/http"
@@ -13,7 +14,7 @@ import (
 	// Acceptable image formats
 	_ "image/gif"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 
 	"golang.org/x/image/bmp"
 	_ "golang.org/x/image/webp"
@@ -59,6 +60,7 @@ func main() {
 	global = make(map[string]image.Image)
 	http.HandleFunc("/", primaryHandler)
 	http.HandleFunc("/img", imageHandler)
+	http.HandleFunc("/delete", deleteHandler)
 
 	log.Println(http.ListenAndServeTLS("[::]:443", "cert.pem", "key.pem", http.DefaultServeMux))
 }
@@ -130,10 +132,11 @@ func primaryHandler(w http.ResponseWriter, r *http.Request) {
 		maxX := img.Bounds().Max.X
 		maxY := img.Bounds().Max.Y
 
+		var url string
 		for y := 0; y < maxY; y++ {
 			// Register all X positions possible for this area.
 			for x := 0; x < maxX; x++ {
-				url := fmt.Sprintf("/img?x=%d&y=%d&token=%s", x, y, token)
+				url = fmt.Sprintf("/img?x=%d&y=%d&token=%s", x, y, token)
 				body += fmt.Sprintf("<img src='%s'>", url)
 
 				if err := pusher.Push(url, nil); err != nil {
@@ -145,6 +148,13 @@ func primaryHandler(w http.ResponseWriter, r *http.Request) {
 			body += "<br>"
 		}
 
+		// A small deletion thing.
+		url = fmt.Sprintf("/delete?token=%s", token)
+		body += fmt.Sprintf("<img src='%s'>", url)
+		if err := pusher.Push(url, nil); err != nil {
+			log.Printf("Failed to push: %v", err)
+		}
+
 		// And we're done.
 		body += `
 	</body>
@@ -152,9 +162,6 @@ func primaryHandler(w http.ResponseWriter, r *http.Request) {
 `
 		log.Print("Sending...")
 		w.Write([]byte(body))
-
-		// We've now pushed everything.
-		delete(global, token)
 
 	default:
 		w.Write([]byte("Were you expecting something?"))
@@ -184,6 +191,8 @@ func imageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	globalImage, hasImage := global[token]
+
 	// I am so sorry.
 	img := image.NewRGBA(image.Rectangle{
 		Min: image.Point{
@@ -195,10 +204,42 @@ func imageHandler(w http.ResponseWriter, r *http.Request) {
 			Y: 1,
 		},
 	})
-	img.Set(0, 0, global[token].At(x, y))
+
+	// Sometimes it fails. lol
+	if hasImage {
+		img.Set(0, 0, globalImage.At(x, y))
+	} else {
+		img.Set(0, 0, color.Transparent)
+	}
 
 	// I truly am sorry.
 	w.Header().Set("Content-Type", "image/bmp")
 	bmp.Encode(w, img)
+	return
+}
+
+func deleteHandler(w http.ResponseWriter, r *http.Request) {
+	queries := r.URL.Query()
+	token := queries["token"][0]
+	if token == "" {
+		error(w)
+		return
+	}
+
+	delete(global, token)
+
+	img := image.NewRGBA(image.Rectangle{
+		Min: image.Point{
+			X: 0,
+			Y: 0,
+		},
+		Max: image.Point{
+			X: 1,
+			Y: 1,
+		},
+	})
+	img.Set(0, 0, color.Transparent)
+	w.Header().Set("Content-Type", "image/png")
+	png.Encode(w, img)
 	return
 }
