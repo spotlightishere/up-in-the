@@ -11,11 +11,12 @@ import (
 	"time"
 
 	// Acceptable image formats
-	"golang.org/x/image/bmp"
-	_ "golang.org/x/image/webp"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+
+	"golang.org/x/image/bmp"
+	_ "golang.org/x/image/webp"
 )
 
 var global map[string]image.Image
@@ -198,7 +199,6 @@ func imageHandler(w http.ResponseWriter, r *http.Request) {
 
 	// I truly am sorry.
 	w.Header().Set("Content-Type", "image/bmp")
-	log.Println(y)
 	bmp.Encode(w, img)
 	return
 }
