@@ -113,7 +113,7 @@ func primaryHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		body := `
+		w.Write([]byte(`
 <!DOCTYPE html>
 <html>
 	<head>
@@ -126,7 +126,7 @@ func primaryHandler(w http.ResponseWriter, r *http.Request) {
 		</style>
 	</head>
 	<body>
-`
+`))
 
 		// Run through the y axis so we can create a new line on images.
 		maxX := img.Bounds().Max.X
@@ -137,7 +137,7 @@ func primaryHandler(w http.ResponseWriter, r *http.Request) {
 			// Register all X positions possible for this area.
 			for x := 0; x < maxX; x++ {
 				url = fmt.Sprintf("/img?x=%d&y=%d&token=%s", x, y, token)
-				body += fmt.Sprintf("<img src='%s'>", url)
+				w.Write([]byte(fmt.Sprintf("<img src='%s'>", url)))
 
 				if err := pusher.Push(url, nil); err != nil {
 					log.Printf("Failed to push: %v", err)
@@ -145,23 +145,22 @@ func primaryHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// And now, a newline.
-			body += "<br>"
+			w.Write([]byte("<br>"))
 		}
 
 		// A small deletion thing.
 		url = fmt.Sprintf("/delete?token=%s", token)
-		body += fmt.Sprintf("<img src='%s'>", url)
+		w.Write([]byte(fmt.Sprintf("<img src='%s'>", url)))
 		if err := pusher.Push(url, nil); err != nil {
 			log.Printf("Failed to push: %v", err)
 		}
 
 		// And we're done.
-		body += `
+		w.Write([]byte(`
 	</body>
 </html>
-`
+`))
 		log.Print("Sending...")
-		w.Write([]byte(body))
 
 	default:
 		w.Write([]byte("Were you expecting something?"))
