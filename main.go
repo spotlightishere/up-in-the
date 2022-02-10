@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"image"
 	"image/color"
@@ -65,27 +66,15 @@ func main() {
 	log.Println(http.ListenAndServeTLS("[::]:443", "cert.pem", "key.pem", http.DefaultServeMux))
 }
 
+// IndexData holds our index.
+//go:embed static/index.html
+var IndexData []byte
+
 func primaryHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		page := fmt.Sprintf(`
-<!DOCTYPE html>
-<html>
-	<head>
-		<title>puuuush</title>
-	</head>
-	<body>
-		<form action="/" method="post" enctype="multipart/form-data">
-		  <input type="file" name="fileToUpload" id="fileToUpload">
-		  <input type="hidden" name="token" id="token" value="%s">
-		  <br>
-		  <input type="submit" value="Upload Image" name="submit">
-		</form>
-	</body>
-</html>
-`, RandStringBytesMaskImprSrcSB(12))
-
-		w.Write([]byte(page))
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(IndexData))
 	case "POST":
 		file, _, err := r.FormFile("fileToUpload")
 		if err != nil {
@@ -93,11 +82,8 @@ func primaryHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		token := r.FormValue("token")
-		if token == "" {
-			error(w)
-			return
-		}
+		// Generate a unique token to reference this request with.
+		token := RandStringBytesMaskImprSrcSB(12)
 
 		// Interpret image
 		img, _, err := image.Decode(file)
@@ -140,7 +126,8 @@ func primaryHandler(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte(fmt.Sprintf("<img src='%s'>", url)))
 
 				if err := pusher.Push(url, nil); err != nil {
-					log.Printf("Failed to push: %v", err)
+					// It's not worth logging.
+					return
 				}
 			}
 
